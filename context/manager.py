@@ -27,8 +27,9 @@ class MessageItem:
         if self.tool_calls:
             result["tool_calls"] = self.tool_calls
 
-        if self.content:
-            result["content"] = self.content
+        # Tool messages always need content field, even if empty
+        if self.role == "tool" or self.content:
+            result["content"] = self.content if self.content is not None else ""
 
         return result
 

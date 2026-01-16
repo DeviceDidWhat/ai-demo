@@ -19,6 +19,7 @@ class CLI:
         self.agent: Agent | None = None
         self.config = config
         self.tui = TUI(config, console)
+        self.current_task = None
 
     async def run_single(self, message: str) -> str | None:
         async with Agent(self.config) as agent:
@@ -53,9 +54,31 @@ class CLI:
                             break
                         continue
 
-                    await self._process_message(user_input)
+                    # Create task for agent execution so we can cancel it
+                    self.current_task = asyncio.create_task(self._process_message(user_input))
+
+                    try:
+                        await self.current_task
+                    except asyncio.CancelledError:
+                        console.print("\n[yellow]Agent execution cancelled[/yellow]")
+                    finally:
+                        self.current_task = None
+
                 except KeyboardInterrupt:
-                    console.print("\n[dim]Use /exit to quit[/dim]")
+                    # Handle Ctrl+C during agent execution
+                    if self.current_task and not self.current_task.done():
+                        console.print("\n[yellow]Cancelling agent execution...[/yellow]")
+                        self.current_task.cancel()
+                        try:
+                            await self.current_task
+                        except asyncio.CancelledError:
+                            pass
+                        self.current_task = None
+                        # Continue the loop to get next input
+                        continue
+                    else:
+                        # Ctrl+C pressed while waiting for input - inform user
+                        console.print("\n[dim]Use /exit to quit[/dim]")
                 except EOFError:
                     break
 
@@ -78,45 +101,51 @@ class CLI:
         assistant_streaming = False
         final_response: str | None = None
 
-        async for event in self.agent.run(message):
-            if event.type == AgentEventType.TEXT_DELTA:
-                content = event.data.get("content", "")
-                if not assistant_streaming:
-                    self.tui.begin_assistant()
-                    assistant_streaming = True
-                self.tui.stream_assistant_delta(content)
-            elif event.type == AgentEventType.TEXT_COMPLETE:
-                final_response = event.data.get("content")
-                if assistant_streaming:
-                    self.tui.end_assistant()
-                    assistant_streaming = False
-            elif event.type == AgentEventType.AGENT_ERROR:
-                error = event.data.get("error", "Unknown error")
-                console.print(f"\n[error]Error: {error}[/error]")
-            elif event.type == AgentEventType.TOOL_CALL_START:
-                tool_name = event.data.get("name", "unknown")
-                tool_kind = self._get_tool_kind(tool_name)
-                self.tui.tool_call_start(
-                    event.data.get("call_id", ""),
-                    tool_name,
-                    tool_kind,
-                    event.data.get("arguments", {}),
-                )
-            elif event.type == AgentEventType.TOOL_CALL_COMPLETE:
-                tool_name = event.data.get("name", "unknown")
-                tool_kind = self._get_tool_kind(tool_name)
-                self.tui.tool_call_complete(
-                    event.data.get("call_id", ""),
-                    tool_name,
-                    tool_kind,
-                    event.data.get("success", False),
-                    event.data.get("output", ""),
-                    event.data.get("error"),
-                    event.data.get("metadata"),
-                    event.data.get("diff"),
-                    event.data.get("truncated", False),
-                    event.data.get("exit_code"),
-                )
+        try:
+            async for event in self.agent.run(message):
+                if event.type == AgentEventType.TEXT_DELTA:
+                    content = event.data.get("content", "")
+                    if not assistant_streaming:
+                        self.tui.begin_assistant()
+                        assistant_streaming = True
+                    self.tui.stream_assistant_delta(content)
+                elif event.type == AgentEventType.TEXT_COMPLETE:
+                    final_response = event.data.get("content")
+                    if assistant_streaming:
+                        self.tui.end_assistant()
+                        assistant_streaming = False
+                elif event.type == AgentEventType.AGENT_ERROR:
+                    error = event.data.get("error", "Unknown error")
+                    console.print(f"\n[error]Error: {error}[/error]")
+                elif event.type == AgentEventType.TOOL_CALL_START:
+                    tool_name = event.data.get("name", "unknown")
+                    tool_kind = self._get_tool_kind(tool_name)
+                    self.tui.tool_call_start(
+                        event.data.get("call_id", ""),
+                        tool_name,
+                        tool_kind,
+                        event.data.get("arguments", {}),
+                    )
+                elif event.type == AgentEventType.TOOL_CALL_COMPLETE:
+                    tool_name = event.data.get("name", "unknown")
+                    tool_kind = self._get_tool_kind(tool_name)
+                    self.tui.tool_call_complete(
+                        event.data.get("call_id", ""),
+                        tool_name,
+                        tool_kind,
+                        event.data.get("success", False),
+                        event.data.get("output", ""),
+                        event.data.get("error"),
+                        event.data.get("metadata"),
+                        event.data.get("diff"),
+                        event.data.get("truncated", False),
+                        event.data.get("exit_code"),
+                    )
+        except asyncio.CancelledError:
+            if assistant_streaming:
+                self.tui.end_assistant()
+            console.print("\n[yellow]Agent execution cancelled[/yellow]")
+            raise
 
         return final_response
 

@@ -121,7 +121,8 @@ class TUI:
                     byte_count = len(value.encode("utf-8", errors="replace"))
                     value = f"<{line_count} lines • {byte_count} bytes>"
 
-            if isinstance(value, bool):
+            # Convert non-string values to strings for rendering
+            if not isinstance(value, str):
                 value = str(value)
 
             table.add_row(key, value)
@@ -614,6 +615,7 @@ class TUI:
 ## Tips
 
 - Just type your message to chat with the agent
+- Press Ctrl+C during execution to cancel the current task
 - The agent can read, write, and execute code
 - Some operations require approval (can be configured)
 """
