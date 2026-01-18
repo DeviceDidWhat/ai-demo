@@ -132,7 +132,11 @@ class Config(BaseModel):
     def validate(self) -> list[str]:
         errors: list[str] = []
 
-        if not self.api_key:
+        # Only require API key if not using Ollama local endpoint
+        base_url = self.base_url or ""
+        is_ollama = "localhost:11434" in base_url or "127.0.0.1:11434" in base_url
+
+        if not self.api_key and not is_ollama:
             errors.append("No API key found. Set API_KEY environment variable")
 
         if not self.cwd.exists():

@@ -1,6 +1,7 @@
 import asyncio
 from pathlib import Path
 import sys
+import os
 import click
 
 from agent.agent import Agent
@@ -9,6 +10,7 @@ from agent.persistence import PersistenceManager, SessionSnapshot
 from agent.session import Session
 from config.config import ApprovalPolicy, Config
 from config.loader import load_config
+from config.model_selector import ModelSelector
 from ui.tui import TUI, get_console
 
 console = get_console()
@@ -344,14 +346,53 @@ class CLI:
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Current working directory",
 )
+@click.option(
+    "--skip-model-selection",
+    is_flag=True,
+    help="Skip interactive model selection and use environment variables",
+)
 def main(
     prompt: str | None,
     cwd: Path | None,
+    skip_model_selection: bool,
 ):
     try:
         config = load_config(cwd=cwd)
     except Exception as e:
         console.print(f"[error]Configuration Error: {e}[/error]")
+        sys.exit(1)
+
+    # Run model selection if API_KEY is not set and not skipped
+    if not skip_model_selection and not os.environ.get("API_KEY"):
+        selector = ModelSelector(console)
+        selection = selector.run_selection()
+
+        if not selection:
+            console.print("[error]Model selection cancelled or failed.[/error]")
+            sys.exit(1)
+
+        # Set environment variables based on selection
+        # Only set API_KEY if provided (Ollama doesn't need it)
+        if selection.get("api_key"):
+            os.environ["API_KEY"] = selection["api_key"]
+
+        if selection.get("base_url"):
+            os.environ["BASE_URL"] = selection["base_url"]
+
+        # Update config with selected model
+        config.model_name = selection["model_name"]
+
+        # Warn user if model doesn't support tools
+        if not selection.get("supports_tools", True):
+            console.print(
+                "\n[bold yellow]⚠ Note: Running in basic chat mode[/bold yellow]"
+            )
+            console.print(
+                "[yellow]This model does not support tool calling.[/yellow]"
+            )
+            console.print(
+                "[yellow]File operations and code execution will not be available.[/yellow]\n"
+            )
 
     errors = config.validate()
 

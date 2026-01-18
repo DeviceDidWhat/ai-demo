@@ -22,9 +22,11 @@ class LLMClient:
 
     def get_client(self) -> AsyncOpenAI:
         if self._client is None:
+            # For Ollama, use a placeholder API key since it doesn't validate
+            api_key = self.config.api_key or "ollama"
             self._client = AsyncOpenAI(
-                api_key=self.config.api_key,  # "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"
-                base_url=self.config.base_url,  # "https://openrouter.ai/api/v1"
+                api_key=api_key,
+                base_url=self.config.base_url,
             )
         return self._client
 
@@ -100,6 +102,22 @@ class LLMClient:
                     )
                     return
             except APIError as e:
+                error_msg = str(e)
+
+                # Check if error is due to model not supporting tools
+                if "does not support tools" in error_msg.lower() or "tool" in error_msg.lower():
+                    # Retry without tools if this is the first attempt with tools
+                    if tools and attempt == 0:
+                        yield StreamEvent(
+                            type=StreamEventType.ERROR,
+                            error=f"Model does not support tools. Retrying without tool calling...",
+                        )
+                        # Remove tools and retry
+                        kwargs.pop("tools", None)
+                        kwargs.pop("tool_choice", None)
+                        tools = None  # Prevent re-adding tools
+                        continue
+
                 yield StreamEvent(
                     type=StreamEventType.ERROR,
                     error=f"API error: {e}",
