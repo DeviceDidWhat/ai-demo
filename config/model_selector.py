@@ -12,7 +12,6 @@ import httpx
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 from rich.table import Table
-from rich.panel import Panel
 
 
 class ModelProvider(str, Enum):
@@ -105,60 +104,28 @@ class ModelSelector:
             self.console.print(f"[yellow]Warning: Could not fetch Ollama models: {e}[/yellow]")
             return []
 
-    def _check_tool_support(self, model_name: str) -> bool:
+    def _check_tool_support(self, model_name: str) -> bool:  # noqa: ARG002
         """
         Check if a model supports tool/function calling
 
-        Common models that support tools:
-        - llama3.1 and newer
-        - mistral (some versions)
-        - mixtral
-        - qwen2.5
+        IMPORTANT: As of Ollama v0.14.2, the OpenAI-compatible tool calling API has bugs
+        that cause "invalid tool call arguments" errors even with models that should support tools.
 
-        Models that typically DON'T support tools:
-        - deepseek-coder (most versions)
-        - codellama
-        - llama2
-        - phi
+        Until Ollama fixes this issue, ALL Ollama models are marked as not supporting tools.
+        This means they run in basic chat mode only.
+
+        For full tool support (file operations, code execution, etc.), users should use:
+        - OpenAI API (gpt-4o, gpt-4o-mini, etc.)
+        - OpenRouter with compatible models
+        - Other OpenAI-compatible API providers
 
         Args:
             model_name: Name of the model
 
         Returns:
-            bool: True if model likely supports tools
+            bool: Always False for Ollama models until tool calling is fixed
         """
-        model_lower = model_name.lower()
-
-        # Known models WITH tool support
-        tool_support_patterns = [
-            "llama3.1", "llama3.2", "llama3.3",
-            "mistral", "mixtral",
-            "qwen2.5", "qwen2.7",
-            "command-r",
-        ]
-
-        # Known models WITHOUT tool support
-        no_tool_support_patterns = [
-            "deepseek-coder", "deepseek-r1",
-            "codellama",
-            "llama2",
-            "phi",
-            "gemma",
-            "vicuna",
-            "orca",
-        ]
-
-        # Check for no tool support first (more specific)
-        for pattern in no_tool_support_patterns:
-            if pattern in model_lower:
-                return False
-
-        # Check for tool support
-        for pattern in tool_support_patterns:
-            if pattern in model_lower:
-                return True
-
-        # Default to False for unknown models (safer)
+        # Always return False for Ollama models due to current tool calling bugs
         return False
 
     def select_ollama_model(self) -> Optional[str]:
@@ -212,7 +179,10 @@ class ModelSelector:
             )
 
         self.console.print(table)
-        self.console.print("\n[yellow]Note:[/yellow] Models without tool support will run in basic chat mode (no file/code operations)")
+        self.console.print("\n[bold red]⚠ OLLAMA LIMITATION:[/bold red]")
+        self.console.print("[yellow]  • Ollama v0.14.2 has bugs with OpenAI-compatible tool calling[/yellow]")
+        self.console.print("[yellow]  • ALL Ollama models run in basic chat mode (NO file operations)[/yellow]")
+        self.console.print("[yellow]  • For full coding features, use OpenAI API instead[/yellow]")
         self.console.print()
 
         # Get user choice
@@ -319,9 +289,22 @@ class ModelSelector:
         self.console.print(f"\n[green]✓ Configured Ollama with model: {model_name}[/green]")
         self.console.print(f"[dim]Base URL: {base_url}[/dim]")
 
-        if not supports_tools:
-            self.console.print(f"[yellow]⚠ Warning: This model does not support tool calling[/yellow]")
-            self.console.print(f"[yellow]  The agent will run in basic chat mode without file/code operations[/yellow]")
+        # Ollama models don't support tools due to current bugs
+        self.console.print(f"\n[bold yellow]⚠ OLLAMA LIMITATION[/bold yellow]")
+        self.console.print(f"[yellow]Due to bugs in Ollama v0.14.2, tool calling is disabled.[/yellow]")
+        self.console.print(f"[yellow]This model will run in CHAT-ONLY mode:[/yellow]")
+        self.console.print(f"  ✗ No file operations (read, write, edit)")
+        self.console.print(f"  ✗ No shell command execution")
+        self.console.print(f"  ✗ No code manipulation")
+        self.console.print(f"  ✓ Can provide advice, explanations, and code suggestions")
+        self.console.print(f"\n[cyan]For full coding features, use OpenAI API instead:[/cyan]")
+        self.console.print(f"  • GPT-4o: Full tool support, best quality")
+        self.console.print(f"  • GPT-4o-mini: Full tool support, cost-effective")
+        self.console.print(f"  • OpenRouter: Various models with tool support")
+
+        proceed = Confirm.ask(f"\n[bold]Continue with {model_name} in chat-only mode?[/bold]", default=True)
+        if not proceed:
+            return None, None, None, False
 
         self.console.print()
 

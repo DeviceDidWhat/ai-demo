@@ -104,19 +104,27 @@ class LLMClient:
             except APIError as e:
                 error_msg = str(e)
 
-                # Check if error is due to model not supporting tools
-                if "does not support tools" in error_msg.lower() or "tool" in error_msg.lower():
-                    # Retry without tools if this is the first attempt with tools
-                    if tools and attempt == 0:
-                        yield StreamEvent(
-                            type=StreamEventType.ERROR,
-                            error=f"Model does not support tools. Retrying without tool calling...",
-                        )
-                        # Remove tools and retry
-                        kwargs.pop("tools", None)
-                        kwargs.pop("tool_choice", None)
-                        tools = None  # Prevent re-adding tools
-                        continue
+                # Check if error is due to tool-related issues
+                tool_error_keywords = [
+                    "does not support tools",
+                    "invalid tool call",
+                    "tool call arguments",
+                    "function calling",
+                ]
+
+                is_tool_error = any(keyword in error_msg.lower() for keyword in tool_error_keywords)
+
+                if is_tool_error and tools and attempt == 0:
+                    # Retry without tools on first attempt
+                    yield StreamEvent(
+                        type=StreamEventType.ERROR,
+                        error=f"Tool calling error: {error_msg}. Retrying without tools...",
+                    )
+                    # Remove tools and retry
+                    kwargs.pop("tools", None)
+                    kwargs.pop("tool_choice", None)
+                    tools = None  # Prevent re-adding tools
+                    continue
 
                 yield StreamEvent(
                     type=StreamEventType.ERROR,
