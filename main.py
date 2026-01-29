@@ -7,7 +7,8 @@ from agent.agent import Agent
 from agent.events import AgentEventType
 from agent.persistence import PersistenceManager, SessionSnapshot
 from agent.session import Session
-from config.config import ApprovalPolicy, Config
+from client.ollama import check_ollama_running, list_ollama_models
+from config.config import ApprovalPolicy, Config, Provider
 from config.loader import load_config
 from ui.tui import TUI, get_console
 
@@ -30,6 +31,7 @@ class CLI:
         self.tui.print_welcome(
             "AI Agent",
             lines=[
+                f"provider: {self.config.provider.value}",
                 f"model: {self.config.model_name}",
                 f"cwd: {self.config.cwd}",
                 "commands: /help /config /approval /model /exit",
@@ -164,12 +166,15 @@ class CLI:
             console.print("[success]Conversation cleared [/success]")
         elif command == "/config":
             console.print("\n[bold]Current Configuration[/bold]")
+            console.print(f"  Provider: {self.config.provider.value}")
             console.print(f"  Model: {self.config.model_name}")
             console.print(f"  Temperature: {self.config.temperature}")
             console.print(f"  Approval: {self.config.approval.value}")
             console.print(f"  Working Dir: {self.config.cwd}")
             console.print(f"  Max Turns: {self.config.max_turns}")
             console.print(f"  Hooks Enabled: {self.config.hooks_enabled}")
+            if self.config.provider == Provider.OLLAMA:
+                console.print(f"  Ollama URL: {self.config.ollama_base_url}")
         elif cmd_name == "/model":
             if cmd_args:
                 self.config.model_name = cmd_args
@@ -336,6 +341,61 @@ class CLI:
         return True
 
 
+async def select_provider(config: Config) -> Config:
+    """Prompt the user to choose between API or Ollama provider."""
+    console.print("\n[bold]Select a provider:[/bold]")
+    console.print("  [cyan]1[/cyan] - API (OpenAI / OpenRouter / compatible endpoint)")
+    console.print("  [cyan]2[/cyan] - Ollama (local models)")
+
+    while True:
+        choice = console.input("\n[bold]Enter choice (1 or 2): [/bold]").strip()
+        if choice in ("1", "2"):
+            break
+        console.print("[error]Invalid choice. Please enter 1 or 2.[/error]")
+
+    if choice == "1":
+        config.provider = Provider.API
+        return config
+
+    # --- Ollama path ---
+    config.provider = Provider.OLLAMA
+    console.print("\n[dim]Checking Ollama server...[/dim]")
+
+    if not await check_ollama_running(config.ollama_base_url):
+        console.print(
+            f"[error]Ollama server is not reachable at {config.ollama_base_url}[/error]"
+        )
+        console.print(
+            "[dim]Make sure Ollama is running (ollama serve) and try again.[/dim]"
+        )
+        sys.exit(1)
+
+    models = await list_ollama_models(config.ollama_base_url)
+    if not models:
+        console.print("[error]No models found in Ollama.[/error]")
+        console.print("[dim]Pull a model first: ollama pull <model-name>[/dim]")
+        sys.exit(1)
+
+    console.print(f"\n[bold]Available Ollama models ({len(models)}):[/bold]")
+    for i, model_name in enumerate(models, 1):
+        console.print(f"  [cyan]{i}[/cyan] - {model_name}")
+
+    while True:
+        model_choice = console.input(
+            "\n[bold]Select a model (number): [/bold]"
+        ).strip()
+        if model_choice.isdigit() and 1 <= int(model_choice) <= len(models):
+            break
+        console.print(
+            f"[error]Invalid choice. Enter a number between 1 and {len(models)}.[/error]"
+        )
+
+    selected_model = models[int(model_choice) - 1]
+    config.model.name = selected_model
+    console.print(f"[success]Using Ollama model: {selected_model}[/success]")
+    return config
+
+
 @click.command()
 @click.argument("prompt", required=False)
 @click.option(
@@ -344,14 +404,31 @@ class CLI:
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Current working directory",
 )
+@click.option(
+    "--provider",
+    "-p",
+    type=click.Choice(["api", "ollama"], case_sensitive=False),
+    default=None,
+    help="LLM provider: api or ollama",
+)
 def main(
     prompt: str | None,
     cwd: Path | None,
+    provider: str | None,
 ):
     try:
         config = load_config(cwd=cwd)
     except Exception as e:
         console.print(f"[error]Configuration Error: {e}[/error]")
+        sys.exit(1)
+
+    # If provider passed via CLI flag, set it directly
+    if provider:
+        config.provider = Provider(provider)
+
+    # If no provider flag, show interactive selection
+    if not provider:
+        config = asyncio.run(select_provider(config))
 
     errors = config.validate()
 
@@ -363,7 +440,6 @@ def main(
 
     cli = CLI(config)
 
-    # messages = [{"role": "user", "content": prompt}]
     if prompt:
         result = asyncio.run(cli.run_single(prompt))
         if result is None:

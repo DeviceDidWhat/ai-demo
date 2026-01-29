@@ -3,8 +3,9 @@ from typing import AsyncGenerator, Awaitable, Callable
 from agent.events import AgentEvent, AgentEventType
 from agent.session import Session
 from client.response import StreamEventType, TokenUsage, ToolCall, ToolResultMessage
+from client.tool_parser import parse_tool_calls_from_text, strip_tool_call_tags
 from config.config import Config
-from prompts.system import create_loop_breaker_prompt
+from prompts.system import create_loop_breaker_prompt, get_prompt_based_tool_instructions
 from tools.base import ToolConfirmation
 
 
@@ -17,6 +18,7 @@ class Agent:
         self.config = config
         self.session: Session | None = Session(self.config)
         self.session.approval_manager.confirmation_callback = confirmation_callback
+        self._prompt_tools_injected: bool = False
 
     async def run(self, message: str):
         await self.session.hook_system.trigger_before_agent(message)
@@ -33,6 +35,17 @@ class Agent:
 
         await self.session.hook_system.trigger_after_agent(message, final_response)
         yield AgentEvent.agent_end(final_response)
+
+    def _inject_prompt_based_tools(self) -> None:
+        """Inject tool-calling instructions into context when native tools aren't supported."""
+        if self._prompt_tools_injected:
+            return
+        tools = self.session.tool_registry.get_tools()
+        if not tools:
+            return
+        instructions = get_prompt_based_tool_instructions(tools)
+        self.session.context_manager.inject_system_supplement(instructions)
+        self._prompt_tools_injected = True
 
     async def _agentic_loop(self) -> AsyncGenerator[AgentEvent, None]:
         max_turns = self.config.max_turns
@@ -51,6 +64,10 @@ class Agent:
                     self.session.context_manager.replace_with_summary(summary)
                     self.session.context_manager.set_latest_usage(usage)
                     self.session.context_manager.add_usage(usage)
+
+            # If native tools aren't supported, inject prompt-based instructions
+            if not self.session.client.tools_supported:
+                self._inject_prompt_based_tools()
 
             tool_schemas = self.session.tool_registry.get_schemas()
 
@@ -75,6 +92,14 @@ class Agent:
                     )
                 elif event.type == StreamEventType.MESSAGE_COMPLETE:
                     usage = event.usage
+
+            # For models without native tool support, parse tool calls from text
+            if not self.session.client.tools_supported and response_text:
+                text_tool_calls = parse_tool_calls_from_text(response_text)
+                if text_tool_calls:
+                    tool_calls.extend(text_tool_calls)
+                    # Strip tool_call tags from the displayed response
+                    response_text = strip_tool_call_tags(response_text)
 
             self.session.context_manager.add_assistant_message(
                 response_text or None,
@@ -146,11 +171,22 @@ class Agent:
                     )
                 )
 
-            for tool_result in tool_call_results:
-                self.session.context_manager.add_tool_result(
-                    tool_result.tool_call_id,
-                    tool_result.content,
+            # For prompt-based tool calling, feed results back as a user message
+            if not self.session.client.tools_supported:
+                results_text = "\n\n".join(
+                    f"## Tool Result: {tc.name} (id: {tc.call_id})\n{r.content}"
+                    for tc, r in zip(tool_calls, tool_call_results)
                 )
+                self.session.context_manager.add_user_message(
+                    f"Here are the tool execution results:\n\n{results_text}\n\n"
+                    "Continue based on these results."
+                )
+            else:
+                for tool_result in tool_call_results:
+                    self.session.context_manager.add_tool_result(
+                        tool_result.tool_call_id,
+                        tool_result.content,
+                    )
 
             loop_detection_error = self.session.loop_detector.check_for_loop()
             if loop_detection_error:

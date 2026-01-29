@@ -316,6 +316,55 @@ IMPORTANT: Structure your response EXACTLY as follows:
 Be extremely specific with file paths and function names. The goal is to allow seamless continuation without redoing any completed work."""
 
 
+def get_prompt_based_tool_instructions(tools: list[Tool]) -> str:
+    """Generate instructions that teach a model to call tools via text output.
+
+    Used as a fallback when the model does not support native tool calling.
+    The instructions tell the model to emit <tool_call> JSON blocks which are
+    then parsed by client/tool_parser.py.
+    """
+    import json
+
+    lines = [
+        "# Tool Calling Instructions",
+        "",
+        "Your model does not support native function calling. Instead, to use a tool,",
+        "include one or more <tool_call> blocks in your response like this:",
+        "",
+        "<tool_call>",
+        '{"name": "tool_name", "arguments": {"param1": "value1"}}',
+        "</tool_call>",
+        "",
+        "Rules:",
+        "- You may include regular text before, after, or between tool call blocks.",
+        "- Each <tool_call> block must contain a single valid JSON object with \"name\" and \"arguments\" keys.",
+        "- After you emit tool calls, the system will execute them and provide the results in the next message.",
+        "- You can call multiple tools by including multiple <tool_call> blocks.",
+        "- When you do NOT need to call a tool, just respond with regular text (no <tool_call> tags).",
+        "",
+        "## Available Tools",
+        "",
+    ]
+
+    for tool in tools:
+        schema = tool.schema
+        params_schema = {}
+        if schema:
+            try:
+                from pydantic.json_schema import model_json_schema
+                params_schema = model_json_schema(schema)
+            except Exception:
+                pass
+
+        lines.append(f"### {tool.name}")
+        lines.append(f"{tool.description}")
+        if params_schema.get("properties"):
+            lines.append(f"Parameters: {json.dumps(params_schema['properties'], indent=2)}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def create_loop_breaker_prompt(loop_description: str) -> str:
     return f"""
 [SYSTEM NOTICE: Loop Detected]

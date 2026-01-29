@@ -19,6 +19,7 @@ class LLMClient:
         self._client: AsyncOpenAI | None = None
         self._max_retries: int = 3
         self.config = config
+        self.tools_supported: bool = True
 
     def get_client(self) -> AsyncOpenAI:
         if self._client is None:
@@ -60,6 +61,10 @@ class LLMClient:
     ) -> AsyncGenerator[StreamEvent, None]:
         client = self.get_client()
 
+        # If model doesn't support native tools, don't send them
+        if not self.tools_supported:
+            tools = None
+
         kwargs = {
             "model": self.config.model_name,
             "messages": messages,
@@ -100,6 +105,14 @@ class LLMClient:
                     )
                     return
             except APIError as e:
+                # Detect "does not support tools" error from Ollama
+                error_msg = str(e).lower()
+                if "does not support tools" in error_msg and tools:
+                    self.tools_supported = False
+                    # Retry without tools — caller will use prompt-based fallback
+                    kwargs.pop("tools", None)
+                    kwargs.pop("tool_choice", None)
+                    continue
                 yield StreamEvent(
                     type=StreamEventType.ERROR,
                     error=f"API error: {e}",
@@ -119,11 +132,18 @@ class LLMClient:
 
         async for chunk in response:
             if hasattr(chunk, "usage") and chunk.usage:
+                cached = 0
+                if (
+                    hasattr(chunk.usage, "prompt_tokens_details")
+                    and chunk.usage.prompt_tokens_details
+                    and hasattr(chunk.usage.prompt_tokens_details, "cached_tokens")
+                ):
+                    cached = chunk.usage.prompt_tokens_details.cached_tokens or 0
                 usage = TokenUsage(
-                    prompt_tokens=chunk.usage.prompt_tokens,
-                    completion_tokens=chunk.usage.completion_tokens,
-                    total_tokens=chunk.usage.total_tokens,
-                    cached_tokens=chunk.usage.prompt_tokens_details.cached_tokens,
+                    prompt_tokens=chunk.usage.prompt_tokens or 0,
+                    completion_tokens=chunk.usage.completion_tokens or 0,
+                    total_tokens=chunk.usage.total_tokens or 0,
+                    cached_tokens=cached,
                 )
 
             if not chunk.choices:
@@ -219,11 +239,18 @@ class LLMClient:
 
         usage = None
         if response.usage:
+            cached = 0
+            if (
+                hasattr(response.usage, "prompt_tokens_details")
+                and response.usage.prompt_tokens_details
+                and hasattr(response.usage.prompt_tokens_details, "cached_tokens")
+            ):
+                cached = response.usage.prompt_tokens_details.cached_tokens or 0
             usage = TokenUsage(
-                prompt_tokens=response.usage.prompt_tokens,
-                completion_tokens=response.usage.completion_tokens,
-                total_tokens=response.usage.total_tokens,
-                cached_tokens=response.usage.prompt_tokens_details.cached_tokens,
+                prompt_tokens=response.usage.prompt_tokens or 0,
+                completion_tokens=response.usage.completion_tokens or 0,
+                total_tokens=response.usage.total_tokens or 0,
+                cached_tokens=cached,
             )
 
         return StreamEvent(

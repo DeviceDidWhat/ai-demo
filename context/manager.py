@@ -27,9 +27,8 @@ class MessageItem:
         if self.tool_calls:
             result["tool_calls"] = self.tool_calls
 
-        # Tool messages always need content field, even if empty
-        if self.role == "tool" or self.content:
-            result["content"] = self.content if self.content is not None else ""
+        # Always include content as a string — Ollama rejects null/missing content
+        result["content"] = self.content if self.content is not None else ""
 
         return result
 
@@ -54,6 +53,13 @@ class ContextManager:
     @property
     def message_count(self) -> int:
         return len(self._messages)
+
+    def inject_system_supplement(self, supplement: str) -> None:
+        """Append additional instructions to the system prompt (e.g. prompt-based tool calling)."""
+        if self._system_prompt:
+            self._system_prompt += "\n\n" + supplement
+        else:
+            self._system_prompt = supplement
 
     def add_user_message(self, content: str) -> None:
         item = MessageItem(

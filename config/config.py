@@ -6,8 +6,13 @@ from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 
+class Provider(str, Enum):
+    API = "api"
+    OLLAMA = "ollama"
+
+
 class ModelConfig(BaseModel):
-    name: str = "mistralai/devstral-2512:free"
+    name: str = "meta-llama/llama-3.3-70b-instruct:free"
     temperature: float = Field(default=1, ge=0.0, le=2.0)
     context_window: int = 256_000
 
@@ -84,6 +89,7 @@ class HookConfig(BaseModel):
 
 
 class Config(BaseModel):
+    provider: Provider = Provider.API
     model: ModelConfig = Field(default_factory=ModelConfig)
     cwd: Path = Field(default_factory=Path.cwd)
     shell_environment: ShellEnvironmentPolicy = Field(
@@ -94,6 +100,7 @@ class Config(BaseModel):
     approval: ApprovalPolicy = ApprovalPolicy.ON_REQUEST
     max_turns: int = 100
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
+    ollama_base_url: str = "http://localhost:11434"
 
     allowed_tools: list[str] | None = Field(
         None,
@@ -107,10 +114,14 @@ class Config(BaseModel):
 
     @property
     def api_key(self) -> str | None:
+        if self.provider == Provider.OLLAMA:
+            return "ollama"
         return os.environ.get("API_KEY")
 
     @property
     def base_url(self) -> str | None:
+        if self.provider == Provider.OLLAMA:
+            return f"{self.ollama_base_url}/v1"
         return os.environ.get("BASE_URL")
 
     @property
@@ -132,7 +143,7 @@ class Config(BaseModel):
     def validate(self) -> list[str]:
         errors: list[str] = []
 
-        if not self.api_key:
+        if self.provider == Provider.API and not os.environ.get("API_KEY"):
             errors.append("No API key found. Set API_KEY environment variable")
 
         if not self.cwd.exists():
