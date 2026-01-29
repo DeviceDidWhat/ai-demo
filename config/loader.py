@@ -15,11 +15,11 @@ AGENT_MD_FILE = "AGENT.MD"
 
 
 def get_config_dir() -> Path:
-    return Path(user_config_dir("ai-agent"))
+    return Path(user_config_dir("aitas"))
 
 
 def get_data_dir() -> Path:
-    return Path(user_data_dir("ai-agent"))
+    return Path(user_data_dir("aitas"))
 
 
 def get_system_config_path() -> Path:

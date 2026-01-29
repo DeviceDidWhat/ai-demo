@@ -43,7 +43,7 @@ def _get_identity_section() -> str:
     """Generate the identity section."""
     return """# Identity
 
-You are an AI coding agent, a terminal-based coding assistant. You are expected to be precise, safe and helpful.
+You are AITAS (AI Terminal Agent System), a powerful terminal-based coding assistant. You are expected to be precise, safe and helpful.
 
 Your capabilities:
 - Receive user prompts and other context provided by the harness, such as files in the workspace

@@ -1,4 +1,5 @@
 import asyncio
+import os
 from pathlib import Path
 import sys
 import click
@@ -10,6 +11,7 @@ from agent.session import Session
 from client.ollama import check_ollama_running, list_ollama_models
 from config.config import ApprovalPolicy, Config, Provider
 from config.loader import load_config
+from rich.rule import Rule
 from ui.tui import TUI, get_console
 
 console = get_console()
@@ -29,7 +31,7 @@ class CLI:
 
     async def run_interactive(self) -> str | None:
         self.tui.print_welcome(
-            "AI Agent",
+            "AITAS",
             lines=[
                 f"provider: {self.config.provider.value}",
                 f"model: {self.config.model_name}",
@@ -46,7 +48,7 @@ class CLI:
 
             while True:
                 try:
-                    user_input = console.input("\n[user]>[/user] ").strip()
+                    user_input = console.input("\n[bold bright_cyan]AITAS >[/bold bright_cyan] ").strip()
                     if not user_input:
                         continue
 
@@ -80,11 +82,11 @@ class CLI:
                         continue
                     else:
                         # Ctrl+C pressed while waiting for input - inform user
-                        console.print("\n[dim]Use /exit to quit[/dim]")
+                        console.print("\n[dim]Type /exit to quit AITAS[/dim]")
                 except EOFError:
                     break
 
-        console.print("\n[dim]Goodbye![/dim]")
+        console.print("\n[dim]AITAS session ended. Goodbye![/dim]")
 
     def _get_tool_kind(self, tool_name: str) -> str | None:
         tool_kind = None
@@ -343,18 +345,67 @@ class CLI:
 
 async def select_provider(config: Config) -> Config:
     """Prompt the user to choose between API or Ollama provider."""
-    console.print("\n[bold]Select a provider:[/bold]")
-    console.print("  [cyan]1[/cyan] - API (OpenAI / OpenRouter / compatible endpoint)")
-    console.print("  [cyan]2[/cyan] - Ollama (local models)")
+    console.print()
+    console.print("[bold bright_cyan]  Select Provider[/bold bright_cyan]")
+    console.print(Rule(style="grey35"))
+    console.print("  [bright_cyan]1[/bright_cyan]  API [dim](OpenAI / OpenRouter / compatible)[/dim]")
+    console.print("  [bright_cyan]2[/bright_cyan]  Ollama [dim](local models)[/dim]")
 
     while True:
-        choice = console.input("\n[bold]Enter choice (1 or 2): [/bold]").strip()
+        choice = console.input("\n[bold bright_cyan]  >[/bold bright_cyan] ").strip()
         if choice in ("1", "2"):
             break
-        console.print("[error]Invalid choice. Please enter 1 or 2.[/error]")
+        console.print("[error]  Invalid choice. Enter 1 or 2.[/error]")
 
     if choice == "1":
         config.provider = Provider.API
+
+        # --- API configuration ---
+        console.print()
+        console.print("[bold bright_cyan]  API Configuration[/bold bright_cyan]")
+        console.print(Rule(style="grey35"))
+
+        # API key
+        existing_key = os.environ.get("API_KEY", "")
+        if existing_key:
+            masked = existing_key[:4] + "..." + existing_key[-4:] if len(existing_key) > 8 else "****"
+            console.print(f"  [dim]API_KEY already set ({masked})[/dim]")
+            change_key = console.input("  [muted]Change it? (y/N):[/muted] ").strip().lower()
+            if change_key in ("y", "yes"):
+                existing_key = ""
+
+        if not existing_key:
+            while True:
+                api_key = console.input("  [bright_cyan]API Key:[/bright_cyan] ").strip()
+                if api_key:
+                    os.environ["API_KEY"] = api_key
+                    break
+                console.print("  [error]API key cannot be empty.[/error]")
+
+        # Base URL
+        existing_url = os.environ.get("BASE_URL", "")
+        if existing_url:
+            console.print(f"  [dim]BASE_URL already set ({existing_url})[/dim]")
+            change_url = console.input("  [muted]Change it? (y/N):[/muted] ").strip().lower()
+            if change_url in ("y", "yes"):
+                existing_url = ""
+
+        if not existing_url:
+            while True:
+                base_url = console.input("  [bright_cyan]Base URL:[/bright_cyan] ").strip()
+                if base_url:
+                    os.environ["BASE_URL"] = base_url
+                    break
+                console.print("  [error]Base URL cannot be empty.[/error]")
+
+        # Model name
+        current_model = config.model.name
+        console.print(f"  [dim]Current model: {current_model}[/dim]")
+        model_input = console.input("  [bright_cyan]Model name[/bright_cyan] [dim](Enter to keep):[/dim] ").strip()
+        if model_input:
+            config.model.name = model_input
+
+        console.print(f"\n  [success]API configured: model={config.model.name}[/success]")
         return config
 
     # --- Ollama path ---
@@ -376,13 +427,14 @@ async def select_provider(config: Config) -> Config:
         console.print("[dim]Pull a model first: ollama pull <model-name>[/dim]")
         sys.exit(1)
 
-    console.print(f"\n[bold]Available Ollama models ({len(models)}):[/bold]")
+    console.print(f"\n[bold bright_cyan]  Available Models ({len(models)})[/bold bright_cyan]")
+    console.print(Rule(style="grey35"))
     for i, model_name in enumerate(models, 1):
-        console.print(f"  [cyan]{i}[/cyan] - {model_name}")
+        console.print(f"  [bright_cyan]{i}[/bright_cyan]  {model_name}")
 
     while True:
         model_choice = console.input(
-            "\n[bold]Select a model (number): [/bold]"
+            "\n[bold bright_cyan]  >[/bold bright_cyan] "
         ).strip()
         if model_choice.isdigit() and 1 <= int(model_choice) <= len(models):
             break
