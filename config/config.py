@@ -12,7 +12,7 @@ class Provider(str, Enum):
 
 
 class ModelConfig(BaseModel):
-    name: str = "meta-llama/llama-3.3-70b-instruct:free"
+    name: str = "mistralai/devstral-2512"
     temperature: float = Field(default=1, ge=0.0, le=2.0)
     context_window: int = 256_000
 
