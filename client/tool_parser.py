@@ -39,17 +39,24 @@ def parse_tool_calls_from_text(text: str) -> list[ToolCall]:
             continue
 
         arguments = data.get("arguments", {})
+        # Convert arguments to JSON string for storage in ToolCall
         if isinstance(arguments, str):
+            # If already a string, try to parse and re-serialize as valid JSON
             try:
-                arguments = json.loads(arguments)
+                args_dict = json.loads(arguments)
+                arguments_json = json.dumps(args_dict)
             except json.JSONDecodeError:
-                arguments = {"raw_arguments": arguments}
+                # If invalid JSON string, store it as raw arguments in a dict
+                arguments_json = json.dumps({"raw_arguments": arguments})
+        else:
+            # If it's a dict or other type, serialize to JSON
+            arguments_json = json.dumps(arguments)
 
         tool_calls.append(
             ToolCall(
                 call_id=f"tc_{uuid.uuid4().hex[:8]}",
                 name=name,
-                arguments=arguments,
+                arguments=arguments_json,
             )
         )
 

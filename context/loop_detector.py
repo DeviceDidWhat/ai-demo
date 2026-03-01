@@ -4,7 +4,7 @@ from typing import Any
 
 class LoopDetector:
     def __init__(self):
-        self.max_exact_repeats = 3
+        self.max_exact_repeats = 2  # Reduced from 3 to catch loops faster
         self.max_cycle_length = 3
         self._history: deque[str] = deque(maxlen=20)
 
@@ -31,7 +31,7 @@ class LoopDetector:
         if len(self._history) >= self.max_exact_repeats:
             recent = list(self._history)[-self.max_exact_repeats :]
             if len(set(recent)) == 1:
-                return f"Same action repeated {self.max_exact_repeats} tiems"
+                return f"Same action repeated {self.max_exact_repeats} times"
 
         if len(self._history) >= self.max_cycle_length * 2:
             history = list(self._history)

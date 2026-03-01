@@ -1,4 +1,5 @@
 import asyncio
+import json
 from typing import Any, AsyncGenerator
 from openai import APIConnectionError, APIError, AsyncOpenAI, RateLimitError
 
@@ -200,12 +201,16 @@ class LLMClient:
                             )
 
         for idx, tc in tool_calls.items():
+            # Convert arguments dict to JSON string for consistency
+            args_dict = parse_tool_call_arguments(tc["arguments"])
+            args_json = json.dumps(args_dict) if isinstance(args_dict, dict) else str(args_dict)
+            
             yield StreamEvent(
                 type=StreamEventType.TOOL_CALL_COMPLETE,
                 tool_call=ToolCall(
                     call_id=tc["id"],
                     name=tc["name"],
-                    arguments=parse_tool_call_arguments(tc["arguments"]),
+                    arguments=args_json,
                 ),
             )
 
@@ -231,11 +236,13 @@ class LLMClient:
         tool_calls: list[ToolCall] = []
         if message.tool_calls:
             for tc in message.tool_calls:
+                args_dict = parse_tool_call_arguments(tc.function.arguments)
+                args_json = json.dumps(args_dict) if isinstance(args_dict, dict) else str(args_dict)
                 tool_calls.append(
                     ToolCall(
                         call_id=tc.id,
                         name=tc.function.name,
-                        arguments=parse_tool_call_arguments(tc.function.arguments),
+                        arguments=args_json,
                     )
                 )
 

@@ -341,6 +341,8 @@ def get_prompt_based_tool_instructions(tools: list[Tool]) -> str:
         "- After you emit tool calls, the system will execute them and provide the results in the next message.",
         "- You can call multiple tools by including multiple <tool_call> blocks.",
         "- When you do NOT need to call a tool, just respond with regular text (no <tool_call> tags).",
+        "- IMPORTANT: Only call each tool ONCE per request. Do NOT call the same tool multiple times in a row.",
+        "- IMPORTANT: After you complete tool calls, ALWAYS provide analysis, explanation, or response text based on the tool results.",
         "",
         "## Available Tools",
         "",
