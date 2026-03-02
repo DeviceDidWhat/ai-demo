@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>YouTube</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            background-color: #0f0f0f;
+            color: #f1f1f1;
+            overflow-x: hidden;
+        }
+
+        .app {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(180deg, #0f0f0f 0%, #1a1a1a 100%);
+            border-bottom: 1px solid #333;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-content {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            height: 56px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            margin-right: 24px;
+            text-decoration: none;
+            color: #f00;
+            font-size: 24px;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+
+        .logo:hover {
+            transform: scale(1.05);
+        }
+
+        .logo i {
+            margin-right: 8px;
+        }
+
+        .search-bar {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 24px;
+            padding: 8px 16px;
+            transition: all 0.2s;
+        }
+
+        .search-bar:focus-within {
+            background: #2a2a2a;
+            border-color: #f00;
+            box-shadow: 0 0 0 4px rgba(255, 0, 0, 0.1);
+        }
+
+        .search-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #f1f1f1;
+            font-size: 16px;
+            padding: 4px 8px;
+        }
+
+        .search-input::placeholder {
+            color: #888;
+        }
+
+        .search-button {
+            background: #f00;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .search-button:hover {
+            background: #cc0000;
+            transform: scale(1.05);
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            margin-left: auto;
+        }
+
+        .nav-link {
+            color: #f1f1f1;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .nav-link:hover {
+            color: #f00;
+        }
+
+        .nav-icon {
+            color: #f1f1f1;
+            font-size: 20px;
+            cursor: pointer;
+            transition: color 0.2s;
+            position: relative;
+        }
+
+        .nav-icon:hover {
+            color: #f00;
+        }
+
+        .nav-icon .notification-dot {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            width: 8px;
+            height: 8px;
+            background: #f00;
+            border-radius: 50%;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            background: #0f0f0f;
+            border-right: 1px solid #333;
+            position: fixed;
+            left: 0;
+            top: 56px;
+            bottom: 0;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        .sidebar-section {
+            padding: 12px 16px;
+            border-bottom: 1px solid #333;
+        }
+
+        .sidebar-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 16px;
+            color: #f1f1f1;
+            text-decoration: none;
+            font-size: 14px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            margin: 2px 0;
+        }
+
+        .sidebar-item:hover {
+            background: #1a1a1a;
+            color: #f00;
+        }
+
+        .sidebar-item.active {
+            background: #f00;
+            color: white;
+        }
+
+        .sidebar-icon {
+            width: 24px;
+            text-align: center;
+            margin-right: 12px;
+        }
+
+        .sidebar-item-text {
+            flex: 1;
+        }
+
+        .sidebar-indicator {
+            width: 8px;
+            height: 8px;
+            background: #f00;
+            border-radius: 50%;
+            margin-left: 8px;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 240px;
+            padding: 20px;
+            max-width: 1280px;
+            margin: 0 auto;
+            padding-top: 76px;
+        }
+
+        .trending-section {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #f1f1f1;
+        }
+
+        .section-link {
+            color: #f00;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .section-link:hover {
+            text-decoration: underline;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .video-card {
+            background: #1a1a1a;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 1px solid #333;
+        }
+
+        .video-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 32px rgba(255, 0, 0, 0.2);
+            border-color: #f00;
+        }
+
+        .video-thumbnail {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%;
+            background: #333;
+            overflow: hidden;
+        }
+
+        .video-thumbnail img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s;
+        }
+
+        .video-card:hover .video-thumbnail img {
+            transform: scale(1.05);
+        }
+
+        .video-duration {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .video-info {
+            padding: 12px;
+        }
+
+        .video-channel {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .channel-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #666;
+            margin-right: 8px;
+        }
+
+        .channel-name {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 2px;
+        }
+
+        .video-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #f1f1f1;
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+
+        .video-meta {
+            font-size: 13px;
+            color: #888;
+        }
+
+        /* Trending Carousel */
+        .trending-carousel {
+            display: flex;
+            overflow-x: auto;
+            gap: 16px;
+            padding: 16px 0;
+            scroll-behavior: smooth;
+        }
+
+        .trending-carousel::-webkit-scrollbar {
+            display: none;
+        }
+
+        .trending-item {
+            min-width: 250px;
+            flex: 0 0 250px;
+            background: #1a1a1a;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .trending-item:hover {
+            transform: scale(1.05);
+        }
+
+        .trending-item img {
+            width: 100%;
+            height: 140px;
+            object-fit: cover;
+            object-position: center;
+            transition: transform 0.3s;
+        }
+
+        .trending-item:hover img {
+            transform: scale(1.05);
+        }
+
+        /* Improved aspect ratio handling */
+        .video-thumbnail, .trending-item img {
+            background-image: linear-gradient(45deg, #333 25%, transparent 25%, transparent 75%, #333 75%, #333 50%, transparent 50%, transparent);
+            background-size: 10px 10px;
+        }
+
+        /* Loading states */
+        .video-thumbnail::before, .trending-item img::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            animation: shimmer 1.5s infinite;
+            opacity: 0.5;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .trending-info {
+            padding: 12px;
+        }
+
+        .trending-badge {
+            display: inline-block;
+            background: linear-gradient(45deg, #ff0000, #ff6b6b);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .header-content {
+                padding: 0 12px;
+            }
+            
+            .nav-links {
+                gap: 16px;
+            }
+            
+            .nav-link {
+                font-size: 12px;
+            }
+            
+            .nav-icon {
+                font-size: 18px;
+            }
+        }
+        
+        @media (max-width: 1024px) {
+            .video-grid {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 16px;
+            }
+            
+            .video-card {
+                border-radius: 8px;
+            }
+            
+            .video-info {
+                padding: 12px;
+            }
+
+            .video-title {
+                font-size: 14px;
+            }
+
+            .video-meta {
+                font-size: 11px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+                width: 80%;
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 16px;
+            }
+
+            .header-content {
+                padding: 0 16px;
+            }
+
+            .search-bar {
+                display: none;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .video-grid {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 16px;
+            }
+
+            .video-card {
+                border-radius: 8px;
+            }
+
+            .video-info {
+                padding: 12px;
+            }
+
+            .video-title {
+                font-size: 14px;
+            }
+
+            .video-meta {
+                font-size: 11px;
+            }
+
+            .section-title {
+                font-size: 18px;
+            }
+
+            .section-link {
+                font-size: 12px;
+            }
+
+            .mobile-menu-toggle {
+                display: flex;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .video-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .trending-item {
+                min-width: 200px;
+                flex: 0 0 200px;
+            }
+            
+            .trending-item img {
+                height: 120px;
+            }
+            
+            .trending-info {
+                padding: 8px;
+            }
+            
+            .trending-badge {
+                font-size: 10px;
+                padding: 2px 6px;
+            }
+            
+            .video-title {
+                font-size: 16px;
+            }
+            
+            .section-title {
+                font-size: 16px;
+            }
+        }
+
+        /* Dark mode toggle (optional) */
+        .dark-mode-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #f00;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 16px rgba(255, 0, 0, 0.3);
+            transition: all 0.3s;
+            z-index: 1001;
+        }
+
+        .dark-mode-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 24px rgba(255, 0, 0, 0.4);
+        }
+
+        .mobile-menu-toggle {
+            display: none;
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            background: #f00;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 16px rgba(255, 0, 0, 0.3);
+            transition: all 0.3s;
+            z-index: 1001;
+        }
+
+        .mobile-menu-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 24px rgba(255, 0, 0, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <button class="mobile-menu-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <a href="#" class="logo">
+                    <i class="fab fa-youtube"></i>
+                    YouTube
+                </a>
+                <div class="search-bar">
+                    <input type="text" class="search-input" placeholder="Search">
+                    <button class="search-button">Search</button>
+                </div>
+                <div class="nav-links">
+                    <a href="#" class="nav-link">Home</a>
+                    <a href="#" class="nav-link">Trending</a>
+                    <a href="#" class="nav-link">Subscriptions</a>
+                    <button class="nav-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-dot"></span>
+                    </button>
+                    <button class="nav-icon">
+                        <i class="fas fa-play-circle"></i>
+                    </button>
+                    <button class="nav-icon">
+                        <i class="fas fa-user-circle"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Library</div>
+                <a href="#" class="sidebar-item">
+                    <span class="sidebar-icon"><i class="fas fa-home"></i></span>
+                    <span class="sidebar-item-text">Home</span>
+                </a>
+                <a href="#" class="sidebar-item">
+                    <span class="sidebar-icon"><i class="fas fa-fire"></i></span>
+                    <span class="sidebar-item-text">Trending</span>
+                </a>
+                <a href="#" class="sidebar-item">
+                    <span class="sidebar-icon"><i class="fas fa-play-circle"></i></span>
+                    <span class="sidebar-item-text">Subscriptions</span>
+                </a>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Your Videos</div>
+                <a href="#" class="sidebar-item">
+                    <span class="sidebar-icon"><i class="fas fa-history"></i></span>
+                    <span class="sidebar-item-text">History</span>
+                </a>
+                <a href="#" class="sidebar-item">
+                    <span class="sidebar-icon"><i class="fas fa-clock"></i></span>
+                    <span class="sidebar-item-text">Watch Later</span>
+                </a>
+                <a href="#" class="sidebar-item">
+                    <span class="sidebar-icon"><i class="fas fa-thumbs-up"></i></span>
+                    <span class="sidebar-item-text">Liked Videos</span>
+                </a>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Subscriptions</div>
+                <a href="#" class="sidebar-item">
+                    <span class="sidebar-icon"><i class="fas fa-play-circle"></i></span>
+                    <span class="sidebar-item-text">Tech Channel</span>
+                    <span class="sidebar-indicator"></span>
+                </a>
+                <a href="#" class="sidebar-item">
+                    <span class="sidebar-icon"><i class="fas fa-play-circle"></i></span>
+                    <span class="sidebar-item-text">Gaming Channel</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Trending Section -->
+            <section class="trending-section">
+                <div class="section-header">
+                    <h2 class="section-title">Trending</h2>
+                    <a href="#" class="section-link">See All</a>
+                </div>
+                <div class="trending-carousel">
+                    <div class="trending-item">
+                        <img src="https://picsum.photos/seed/trending1/250/140.jpg" alt="Trending Video 1">
+                        <div class="trending-info">
+                            <span class="trending-badge">#1</span>
+                            <h3 class="video-title">Amazing Tech Unboxing - Must Watch!</h3>
+                            <div class="video-meta">
+                                <span class="channel-name">Tech Channel</span>
+                                <span>• 2.3M views</span>
+                                <span>• 2 days ago</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="trending-item">
+                        <img src="https://picsum.photos/seed/trending2/250/140.jpg" alt="Trending Video 2">
+                        <div class="trending-info">
+                            <span class="trending-badge">#2</span>
+                            <h3 class="video-title">Epic Gaming Moment - You Won't Believe It!</h3>
+                            <div class="video-meta">
+                                <span class="channel-name">Gaming Channel</span>
+                                <span>• 1.8M views</span>
+                                <span>• 3 days ago</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="trending-item">
+                        <img src="https://picsum.photos/seed/trending3/250/140.jpg" alt="Trending Video 3">
+                        <div class="trending-info">
+                            <span class="trending-badge">#3</span>
+                            <h3 class="video-title">Top 10 Amazing Facts You Never Knew</h3>
+                            <div class="video-meta">
+                                <span class="channel-name">Fact Channel</span>
+                                <span>• 1.5M views</span>
+                                <span>• 4 days ago</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="trending-item">
+                        <img src="https://picsum.photos/seed/trending4/250/140.jpg" alt="Trending Video 4">
+                        <div class="trending-info">
+                            <span class="trending-badge">#4</span>
+                            <h3 class="video-title">New Music Video - Official Release</h3>
+                            <div class="video-meta">
+                                <span class="channel-name">Music Channel</span>
+                                <span>• 2.1M views</span>
+                                <span>• 1 day ago</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Video Grid -->
+            <section>
+                <div class="section-header">
+                    <h2 class="section-title">Recommended</h2>
+                    <a href="#" class="section-link">See All</a>
+                </div>
+                <div class="video-grid">
+                    <div class="video-card">
+                        <div class="video-thumbnail">
+                            <img src="https://picsum.photos/seed/video1/400/225.jpg" alt="Video 1">
+                            <span class="video-duration">10:30</span>
+                        </div>
+                        <div class="video-info">
+                            <div class="video-channel">
+                                <div class="channel-avatar"></div>
+                                <span class="channel-name">Tech Reviews</span>
+                            </div>
+                            <h3 class="video-title">Latest Smartphone Review - 2024 Model</h3>
+                            <div class="video-meta">
+                                <span>Tech Reviews</span>
+                                <span>• 1.2M views</span>
+                                <span>• 5 days ago</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="video-card">
+                        <div class="video-thumbnail">
+                            <img src="https://picsum.photos/seed/video2/400/225.jpg" alt="Video 2">
+                            <span class="video-duration">15:45</span>
+                        </div>
+                        <div class="video-info">
+                            <div class="video-channel">
+                                <div class="channel-avatar"></div>
+                                <span class="channel-name">Gaming World</span>
+                            </div>
+                            <h3 class="video-title">Top 5 Games You Must Play This Year</h3>
+                            <div class="video-meta">
+                                <span>Gaming World</span>
+                                <span>• 800K views</span>
+                                <span>• 1 week ago</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="video-card">
+                        <div class="video-thumbnail">
+                            <img src="https://picsum.photos/seed/video3/400/225.jpg" alt="Video 3">
+                            <span class="video-duration">8:20</span>
+                        </div>
+                        <div class="video-info">
+                            <div class="video-channel">
+                                <div class="channel-avatar"></div>
+                                <span class="channel-name">Cooking Channel</span>
+                            </div>
+                            <h3 class="video-title">Easy Dinner Recipe - Ready in 30 Minutes</h3>
+                            <div class="video-meta">
+                                <span>Cooking Channel</span>
+                                <span>• 500K views</span>
+                                <span>• 2 days ago</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="video-card">
+                        <div class="video-thumbnail">
+                            <img src="https://picsum.photos/seed/video4/400/225.jpg" alt="Video 4">
+                            <span class="video-duration">12:15</span>
+                        </div>
+                        <div class="video-info">
+                            <div class="video-channel">
+                                <div class="channel-avatar"></div>
+                                <span class="channel-name">Travel Vlogs</span>
+                            </div>
+                            <h3 class="video-title">Amazing Places to Visit in Europe</h3>
+                            <div class="video-meta">
+                                <span>Travel Vlogs</span>
+                                <span>• 750K views</span>
+                                <span>• 4 days ago</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="video-card">
+                        <div class="video-thumbnail">
+                            <img src="https://picsum.photos/seed/video5/400/225.jpg" alt="Video 5">
+                            <span class="video-duration">20:00</span>
+                        </div>
+                        <div class="video-info">
+                            <div class="video-channel">
+                                <div class="channel-avatar"></div>
+                                <span class="channel-name">Music Channel</span>
+                            </div>
+                            <h3 class="video-title">Full Concert - Live Performance</h3>
+                            <div class="video-meta">
+                                <span>Music Channel</span>
+                                <span>• 2.5M views</span>
+                                <span>• 1 day ago</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="video-card">
+                        <div class="video-thumbnail">
+                            <img src="https://picsum.photos/seed/video6/400/225.jpg" alt="Video 6">
+                            <span class="video-duration">5:30</span>
+                        </div>
+                        <div class="video-info">
+                            <div class="video-channel">
+                                <div class="channel-avatar"></div>
+                                <span class="channel-name">Tech Tips</span>
+                            </div>
+                            <h3 class="video-title">5 Hidden iPhone Features You Didn't Know</h3>
+                            <div class="video-meta">
+                                <span>Tech Tips</span>
+                                <span>• 300K views</span>
+                                <span>• 6 hours ago</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Optional: Dark Mode Toggle (if you want to add functionality) -->
+    <button class="dark-mode-toggle" onclick="toggleDarkMode()">
+        <i class="fas fa-moon"></i>
+    </button>
+
+    <script>
+        // Mobile menu toggle
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            sidebar.classList.toggle('active');
+        }
+
+        // Optional: Dark mode toggle functionality
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+        }
+
+        // Optional: Smooth scrolling for carousel
+        document.addEventListener('DOMContentLoaded', function() {
+            const carousel = document.querySelector('.trending-carousel');
+            if (carousel) {
+                carousel.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    carousel.scrollBy({ left: e.deltaY * 2, behavior: 'smooth' });
+                });
+            }
+        });
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(e) {
+            const sidebar = document.querySelector('.sidebar');
+            const mobileToggle = document.querySelector('.mobile-menu-toggle');
+            
+            if (window.innerWidth <= 768 && 
+                !sidebar.contains(e.target) && 
+                !mobileToggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+    </script>
+</body>
+</html>

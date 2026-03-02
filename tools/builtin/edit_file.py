@@ -7,7 +7,7 @@ from tools.base import (
     ToolKind,
     ToolResult,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from utils.paths import ensure_parent_directory, resolve_path
 
@@ -23,19 +23,31 @@ class EditParams(BaseModel):
     )
     new_string: str = Field(
         ...,
-        description="The text to replace old_string with. Can be empty to delete text",
+        description="The text to replace old_string with. Can be empty to delete text. MUST be different from old_string.",
     )
     replace_all: bool = Field(
         False, description="Replace all occurrences of old_string (default: false)"
     )
 
+    @field_validator("new_string")
+    def validate_strings_differ(cls, new_string, info):
+        """Ensure old_string and new_string are different when old_string is provided."""
+        old_string = info.data.get("old_string", "")
+        if old_string and old_string == new_string:
+            raise ValueError(
+                "old_string and new_string must be different. "
+                "They cannot be identical - this would result in no change."
+            )
+        return new_string
+
 
 class EditTool(Tool):
     name = "edit"
     description = (
-        "Edit a file by replacing text. The old_string must match exactly "
-        "(including whitespace and indentation) and must be unique in the file "
-        "unless replace_all is true. Use this for precise, surgical edits. "
+        "Edit a file by replacing text. CRITICAL: old_string and new_string MUST be different. "
+        "The old_string must match exactly (including whitespace and indentation) and must be unique "
+        "in the file unless replace_all is true. Include surrounding context (3-5 lines before and "
+        "after) in old_string to ensure uniqueness. Use this for precise, surgical edits. "
         "For creating new files or complete rewrites, use write_file instead."
     )
     kind = ToolKind.WRITE
@@ -47,6 +59,16 @@ class EditTool(Tool):
     ) -> ToolConfirmation | None:
         params = EditParams(**invocation.params)
         path = resolve_path(invocation.cwd, params.path)
+
+        # Early validation: old_string and new_string must be different
+        if params.old_string and params.old_string == params.new_string:
+            return ToolConfirmation(
+                tool_name=self.name,
+                params=invocation.params,
+                description=f"ERROR: Edit file {path} - old_string equals new_string (no-op edit)",
+                diff=None,
+                affected_paths=[path],
+            )
 
         is_new_file = not path.exists()
 
@@ -90,6 +112,15 @@ class EditTool(Tool):
     async def execute(self, invocation: ToolInvocation) -> ToolResult:
         params = EditParams(**invocation.params)
         path = resolve_path(invocation.cwd, params.path)
+
+        # Early validation: old_string and new_string must be different
+        if params.old_string and params.old_string == params.new_string:
+            return ToolResult.error_result(
+                "EDIT ERROR: old_string equals new_string - this is a no-op edit with no effect. "
+                "Either: (1) Ensure new_string is actually different from old_string, "
+                "(2) Re-read the file to verify the exact text you want to replace, or "
+                "(3) Verify you're making the correct change."
+            )
 
         if not path.exists():
             if params.old_string:
@@ -147,9 +178,11 @@ class EditTool(Tool):
             new_content = old_content.replace(params.old_string, params.new_string, 1)
             replace_count = 1
 
+        # This should not occur due to early validation, but kept as safety check
         if new_content == old_content:
             return ToolResult.error_result(
-                "No change made - old_string equals new_string"
+                "ERROR: Replacement resulted in no change. The old_string may not have been found, "
+                "or old_string and new_string are identical."
             )
 
         try:
