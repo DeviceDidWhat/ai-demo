@@ -1,6 +1,6 @@
 from datetime import datetime
 import platform
-from config.config import Config
+from config.config import Config, Provider
 from tools.base import Tool
 
 
@@ -16,6 +16,10 @@ def get_system_prompt(
     # Environment
     parts.append(_get_environment_section(config))
 
+    # Add tool limitations notice for Ollama
+    if config.provider == Provider.OLLAMA:
+        parts.append(_get_ollama_limitations_section())
+    
     if tools:
         parts.append(_get_tool_guidelines_section(tools))
 
@@ -67,6 +71,28 @@ def _get_environment_section(config: Config) -> str:
 - **Shell**: {_get_shell_info()}
 
 The user has granted you access to run tools in service of their request. Use them when needed."""
+
+
+def _get_ollama_limitations_section() -> str:
+    """Generate limitations notice for Ollama models."""
+    return """# IMPORTANT: Ollama Model Limitations
+
+**You are running on a local Ollama model. The following capabilities are NOT available:**
+- File operations (read_file, edit, write_file, glob, list_dir)
+- Shell commands (shell)
+- Web operations (web_search, web_fetch)
+- Any other tool functions
+
+**You are limited to chat-only interactions.** You cannot:
+1. Execute any commands or tools even if explicitly asked by the user
+2. Read, write, or modify files
+3. Perform shell operations or system commands
+4. Access the web or fetch external data
+
+When a user asks you to perform any of these tasks, respond with:
+"I'm unable to perform that task. I'm running on a local Ollama model which is chat-only and doesn't support tool function calls. I can only provide explanations, advice, and analysis through conversation. To use file operations or shell commands, you would need to use an API-based model provider."
+
+Focus on providing helpful explanations and guidance instead."""
 
 
 def _get_shell_info() -> str:

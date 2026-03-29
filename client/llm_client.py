@@ -12,7 +12,7 @@ from client.response import (
     ToolCallDelta,
     parse_tool_call_arguments,
 )
-from config.config import Config
+from config.config import Config, Provider
 
 
 class LLMClient:
@@ -20,7 +20,8 @@ class LLMClient:
         self._client: AsyncOpenAI | None = None
         self._max_retries: int = 3
         self.config = config
-        self.tools_supported: bool = True
+        # Ollama models do not support tool calling - disable it upfront
+        self.tools_supported: bool = (config.provider != Provider.OLLAMA)
 
     def get_client(self) -> AsyncOpenAI:
         if self._client is None:
