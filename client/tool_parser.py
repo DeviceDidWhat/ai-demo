@@ -22,34 +22,60 @@ _TOOL_CALL_PATTERN = re.compile(
     re.DOTALL,
 )
 
+_UNQUOTED_KEY_PATTERN = re.compile(r'([\{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:')
+_TRAILING_COMMA_PATTERN = re.compile(r",\s*([}\]])")
 
-def parse_tool_calls_from_text(text: str) -> list[ToolCall]:
-    """Extract tool call blocks from model text output."""
-    tool_calls: list[ToolCall] = []
 
-    for match in _TOOL_CALL_PATTERN.finditer(text):
-        raw = match.group(1).strip()
+def _repair_common_json_issues(raw: str) -> str:
+    """Repair common JSON mistakes from model output before parsing."""
+    repaired = _UNQUOTED_KEY_PATTERN.sub(r'\1"\2":', raw)
+    repaired = _TRAILING_COMMA_PATTERN.sub(r"\1", repaired)
+    return repaired
+
+
+def _load_tool_call_json(raw: str) -> tuple[dict | None, str | None]:
+    """Parse tool JSON with a single repair pass for common formatting issues."""
+    try:
+        return json.loads(raw), None
+    except json.JSONDecodeError as first_error:
+        repaired = _repair_common_json_issues(raw)
+        if repaired == raw:
+            return None, str(first_error)
+
         try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+            return json.loads(repaired), None
+        except json.JSONDecodeError as second_error:
+            return None, str(second_error)
+
+
+def parse_tool_calls_with_errors(text: str) -> tuple[list[ToolCall], list[str]]:
+    """Extract tool calls and collect parse errors for malformed blocks."""
+    tool_calls: list[ToolCall] = []
+    parse_errors: list[str] = []
+
+    for index, match in enumerate(_TOOL_CALL_PATTERN.finditer(text), start=1):
+        raw = match.group(1).strip()
+        data, parse_error = _load_tool_call_json(raw)
+        if data is None:
+            snippet = raw.replace("\n", " ")[:120]
+            parse_errors.append(
+                f"Block {index}: invalid JSON ({parse_error}). Snippet: {snippet}"
+            )
             continue
 
         name = data.get("name")
         if not name:
+            parse_errors.append(f"Block {index}: missing required key 'name'.")
             continue
 
         arguments = data.get("arguments", {})
-        # Convert arguments to JSON string for storage in ToolCall
         if isinstance(arguments, str):
-            # If already a string, try to parse and re-serialize as valid JSON
             try:
                 args_dict = json.loads(arguments)
                 arguments_json = json.dumps(args_dict)
             except json.JSONDecodeError:
-                # If invalid JSON string, store it as raw arguments in a dict
                 arguments_json = json.dumps({"raw_arguments": arguments})
         else:
-            # If it's a dict or other type, serialize to JSON
             arguments_json = json.dumps(arguments)
 
         tool_calls.append(
@@ -60,6 +86,12 @@ def parse_tool_calls_from_text(text: str) -> list[ToolCall]:
             )
         )
 
+    return tool_calls, parse_errors
+
+
+def parse_tool_calls_from_text(text: str) -> list[ToolCall]:
+    """Extract tool call blocks from model text output."""
+    tool_calls, _ = parse_tool_calls_with_errors(text)
     return tool_calls
 
 

@@ -73,7 +73,7 @@ AITAS_LOGO_LARGE = (
 # Logo is ~48 chars wide + 2 border + 2*2 padding = 56
 _LOGO_MIN_WIDTH = 58
 
-AITAS_TAGLINE = "AI Terminal Agent System"
+AITAS_TAGLINE = "AI Terminal Automation System"
 
 # ── Tool Icons (ASCII-safe) ────────────────────────────────────────────
 TOOL_ICONS = {

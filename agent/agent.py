@@ -5,7 +5,7 @@ from typing import AsyncGenerator, Awaitable, Callable
 from agent.events import AgentEvent, AgentEventType
 from agent.session import Session
 from client.response import StreamEventType, TokenUsage, ToolCall, ToolResultMessage
-from client.tool_parser import parse_tool_calls_from_text, strip_tool_call_tags
+from client.tool_parser import parse_tool_calls_with_errors, strip_tool_call_tags
 from config.config import Config
 from prompts.system import create_loop_breaker_prompt, get_prompt_based_tool_instructions
 from tools.base import ToolConfirmation, ToolResult
@@ -74,6 +74,7 @@ class Agent:
             tool_schemas = self.session.tool_registry.get_schemas()
 
             tool_calls: list[ToolCall] = []
+            parse_errors: list[str] = []
             usage: TokenUsage | None = None
 
             async for event in self.session.client.chat_completion(
@@ -97,11 +98,11 @@ class Agent:
 
             # For models without native tool support, parse tool calls from text
             if not self.session.client.tools_supported and response_text:
-                text_tool_calls = parse_tool_calls_from_text(response_text)
+                text_tool_calls, parse_errors = parse_tool_calls_with_errors(response_text)
+                # Always strip tool_call tags from displayed response, even when parsing fails.
+                response_text = strip_tool_call_tags(response_text)
                 if text_tool_calls:
                     tool_calls.extend(text_tool_calls)
-                    # Strip tool_call tags from the displayed response
-                    response_text = strip_tool_call_tags(response_text)
 
             self.session.context_manager.add_assistant_message(
                 response_text or None,
@@ -129,6 +130,32 @@ class Agent:
                 )
 
             if not tool_calls:
+                # For prompt-based tools, retry once the model emits malformed tool JSON
+                # instead of leaking raw tags or ending the run with no output.
+                if (
+                    not self.session.client.tools_supported
+                    and parse_errors
+                    and not response_text.strip()
+                ):
+                    error_lines = "\n".join(f"- {error}" for error in parse_errors[:3])
+                    self.session.context_manager.add_user_message(
+                        "Your previous <tool_call> block could not be parsed. "
+                        "Please retry with strict JSON and valid quoting.\n\n"
+                        "Requirements:\n"
+                        "- Use valid JSON only\n"
+                        "- Include exactly keys 'name' and 'arguments'\n"
+                        "- Quote all keys and string values\n"
+                        "- Example: <tool_call>{\"name\":\"write_file\",\"arguments\":{\"path\":\"styles.css\",\"content\":\"...\"}}</tool_call>\n\n"
+                        f"Parser errors:\n{error_lines}"
+                    )
+
+                    if usage:
+                        self.session.context_manager.set_latest_usage(usage)
+                        self.session.context_manager.add_usage(usage)
+
+                    self.session.context_manager.prune_tool_outputs()
+                    continue
+
                 if usage:
                     self.session.context_manager.set_latest_usage(usage)
                     self.session.context_manager.add_usage(usage)
